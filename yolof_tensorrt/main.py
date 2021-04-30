@@ -5,7 +5,7 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 from PIL import Image
 import common
-
+import time
 
 TRT_LOGGER = trt.Logger()
 
@@ -117,30 +117,38 @@ def allocate_buffers2(engine,h_,w_):
 def main():
     onnx_file_path = 'test3.onnx'
     engine_file_path = "model_engine.trt"
-    input_image_path="../yoloF_test/YOLOF/datasets/coco/val2017/000000000285.jpg"
-    image_raw=Image.open(input_image_path)
-    w, h = image_raw.size
-    w_, h_ = resize_im(w, h, scale=800, max_scale=4000)
-    print(w_,h_)
-    image_resized=image_raw.resize((w_,h_),resample=Image.BICUBIC)
-    image_resized = np.array(image_resized, dtype=np.int32, order='C')
-    
+    #input_image_path="../yoloF_test/YOLOF/datasets/coco/val2017/000000000285.jpg"
+    file = open("/root/yoloF_test/YOLOF/datasets/coco/val.txt")
+    mylist = []
+    image_resized=[]
+    for line in file.readlines():
+        mylist.append(line.strip().split(" "))
+    for i in mylist:
+                input_image_path='../yoloF_test/YOLOF/datasets/coco/val2017/'+i[0]
+                image_raw=Image.open(input_image_path)
+                w, h = image_raw.size
+                w_, h_ = resize_im(w, h, scale=800, max_scale=4000)
+                image_resized=image_raw.resize((w_,h_),resample=Image.BICUBIC)
+                image_resized = np.array(image_resized, dtype=np.int32, order='C') 
     output_shapes = [(1, 512, 28, 25)]
     trt_outputs = []
     inputs = []
     with get_engine(onnx_file_path, engine_file_path) as engine, engine.create_execution_context() as context:
-        inputs,outputs, bindings, stream = allocate_buffers2(engine,w_, h_)
-        # Do inference
-        print('Running inference on image {}...'.format(input_image_path))
-        # Set host input to the image. The common.do_inference function will copy the input to the GPU before executing.
-        inputs[0].host = image_resized
-        context.set_binding_shape(0, (1, 3, h_, w_))
-        trt_outputs = common.do_inference_v2(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
-
-    # Before doing post-processing, we need to reshape the outputs as the common.do_inference will give us flat arrays.
-    trt_outputs = [output.reshape(shape) for output, shape in zip(trt_outputs, output_shapes)]
-    print(trt_outputs[0])
-
+                inputs,outputs, bindings, stream = allocate_buffers2(engine,w_, h_)
+                # Do inference
+                print('Running inference on image {}...'.format(input_image_path))
+                # Set host input to the image. The common.do_inference function will copy the input to the GPU before executing.
+                inputs[0].host = image_resized
+                context.set_binding_shape(0, (1, 3, h_, w_))
+                t1=time.time()
+                trt_outputs = common.do_inference_v2(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
+                t2=time.time()
+                print("time spent:",t2-t1)
+                print(trt_outputs[0])
+        # Before doing post-processing, we need to reshape the outputs as the common.do_inference will give us flat arrays.
+        #trt_outputs = [output.reshape(shape) for output, shape in zip(trt_outputs, output_shapes)]
+        #print(trt_outputs[0])
+        
 
 main()
 # engine = get_engine(onnx_file_path, engine_file_path)
